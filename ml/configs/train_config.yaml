@@ -1,0 +1,99 @@
+project:
+  name: "farmguard-ai"
+  seed: 42
+  output_dir: "outputs"
+  checkpoint_dir: "outputs/checkpoints"
+  logs_dir: "outputs/logs"
+
+data:
+  train_dir: "data/processed/train"
+  val_dir: "data/processed/val"
+  test_dir: "data/processed/test"
+  image_size: 224
+  num_workers: 2
+  pin_memory: true
+
+classes:
+  num_classes: 18
+  names:
+    - "cassava_bacterial_blight"
+    - "cassava_brown_streak_disease"
+    - "cassava_green_mite"
+    - "cassava_healthy"
+    - "cassava_mosaic_disease"
+    - "maize_cercospora_leaf_spot"
+    - "maize_common_rust"
+    - "maize_healthy"
+    - "maize_northern_leaf_blight"
+    - "pepper_bacterial_spot"
+    - "pepper_healthy"
+    - "tomato_early_blight"
+    - "tomato_healthy"
+    - "tomato_late_blight"
+    - "tomato_mosaic_virus"
+    - "tomato_septoria_leaf_spot"
+    - "tomato_target_spot"
+    - "tomato_yellow_leaf_curl_virus"
+
+model:
+  architecture: "efficientnet_b0"
+  pretrained: true
+  dropout: 0.3
+  freeze_backbone: true
+  unfreeze_last_blocks: 2
+
+training:
+  batch_size: 32
+  epochs_head: 4
+  epochs_finetune: 6
+  optimizer: "adamw"
+  learning_rate_head: 0.001
+  learning_rate_finetune: 0.0002
+  weight_decay: 0.0001
+  label_smoothing: 0.0
+  mixed_precision: true
+  gradient_clip: 1.0
+
+scheduler:
+  name: "reduce_lr_on_plateau"
+  mode: "max"
+  factor: 0.5
+  patience: 2
+  min_lr: 0.000001
+
+early_stopping:
+  enabled: true
+  monitor: "val_f1"
+  patience: 3
+
+augmentation:
+  horizontal_flip: true
+  rotation_degrees: 15
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  random_resized_crop: false
+
+evaluation:
+  metrics:
+    - "accuracy"
+    - "macro_f1"
+  save_confusion_matrix: true
+  save_classification_report: true
+
+checkpointing:
+  save_best_only: true
+  monitor: "val_f1"
+  mode: "max"
+  best_model_name: "best_model.pth"
+  save_last: true
+  last_model_name: "last_model.pth"
+
+huggingface:
+  enabled: false
+  repo_id: "your-hf-username/farmguard-ai-crop-disease-model"
+  model_filename: "best_model.pth"
+
+inference:
+  class_map_file: "outputs/checkpoints/class_to_idx.json"
+  confidence_threshold: 0.5
