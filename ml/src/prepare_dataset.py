@@ -1,6 +1,7 @@
 import random
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -11,7 +12,7 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 PLANTVILLAGE_DATASET = "emmarex/plantdisease"
-CASSAVA_DATASET = "crowdai/cassava-leaf-disease-classification"
+CASSAVA_COMPETITION = "cassava-leaf-disease-classification"
 
 RANDOM_SEED = 42
 TRAIN_RATIO = 0.70
@@ -59,21 +60,62 @@ def clear_processed_dir() -> None:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def download_kaggle_dataset(dataset_name: str) -> None:
-    print(f"Downloading {dataset_name}...")
-    subprocess.run(
-        [
-            "kaggle",
-            "datasets",
-            "download",
-            "-d",
-            dataset_name,
-            "-p",
-            str(RAW_DIR),
-            "--unzip",
-        ],
-        check=True,
-    )
+def download_kaggle_dataset(dataset_name: str) -> bool:
+    print(f"Downloading dataset {dataset_name}...")
+    try:
+        subprocess.run(
+            [
+                "kaggle",
+                "datasets",
+                "download",
+                "-d",
+                dataset_name,
+                "-p",
+                str(RAW_DIR),
+                "--unzip",
+            ],
+            check=True,
+        )
+        return True
+    except subprocess.CalledProcessError as exc:
+        print(f"Warning: failed to download dataset '{dataset_name}'.")
+        print(f"Kaggle CLI error: {exc}")
+        return False
+
+
+def download_kaggle_competition(competition_name: str) -> bool:
+    print(f"Downloading competition {competition_name}...")
+
+    try:
+        subprocess.run(
+            [
+                "kaggle",
+                "competitions",
+                "download",
+                "-c",
+                competition_name,
+                "-p",
+                str(RAW_DIR),
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Warning: failed to download competition '{competition_name}'.")
+        print("Tip: open the competition page and accept rules before downloading.")
+        print(f"Kaggle CLI error: {exc}")
+        return False
+
+    zip_files = list(RAW_DIR.glob("*.zip"))
+    if not zip_files:
+        print(f"Warning: no zip files found in {RAW_DIR} after competition download.")
+        return False
+
+    for zip_path in zip_files:
+        print(f"Extracting {zip_path.name}...")
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(RAW_DIR)
+
+    return True
 
 
 def get_image_files(folder: Path) -> list[Path]:
@@ -236,14 +278,20 @@ def main() -> None:
     ensure_dirs()
     clear_processed_dir()
 
-    download_kaggle_dataset(PLANTVILLAGE_DATASET)
-    download_kaggle_dataset(CASSAVA_DATASET)
+    plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
+    cassava_ok = download_kaggle_competition(CASSAVA_COMPETITION)
 
-    print("\nPreparing PlantVillage classes...")
-    prepare_plantvillage()
+    if plantvillage_ok:
+        print("\nPreparing PlantVillage classes...")
+        prepare_plantvillage()
+    else:
+        print("\nSkipping PlantVillage preparation due to download failure.")
 
-    print("\nPreparing cassava classes...")
-    prepare_cassava()
+    if cassava_ok:
+        print("\nPreparing cassava classes...")
+        prepare_cassava()
+    else:
+        print("\nSkipping cassava preparation due to download failure.")
 
     print_dataset_summary()
     print(f"\nDataset preparation complete.")
