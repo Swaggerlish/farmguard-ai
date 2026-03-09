@@ -67,9 +67,3 @@ Prepare dataset and train:
 ## Bottom line
 - **Suitable for training on Colab after small setup steps.**
 - With the import fix in this commit, the core train pipeline should run more reliably from a standard Colab working directory.
-
-
-## Cassava source update
-- The prep script now supports cassava from Mendeley-style sources.
-- Optional: set `MENDELEY_CASSAVA_URL` in Colab to auto-download a cassava zip archive.
-- If not set, the script searches `data/raw` for either `train.csv` + `train_images` or cassava class folders.

@@ -2,7 +2,6 @@ import os
 import random
 import shutil
 import subprocess
-import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -14,7 +13,7 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 PLANTVILLAGE_DATASET = "emmarex/plantdisease"
-MENDELEY_CASSAVA_URL = os.getenv("MENDELEY_CASSAVA_URL", "")
+CASSAVA_COMPETITION = "cassava-leaf-disease-classification"
 
 RANDOM_SEED = 42
 TRAIN_RATIO = 0.70
@@ -122,36 +121,39 @@ def download_kaggle_dataset(dataset_name: str) -> bool:
         return False
 
 
-def download_mendeley_cassava() -> bool:
-    """
-    Download cassava data from Mendeley when MENDELEY_CASSAVA_URL is provided.
-    If URL is not provided, we continue and rely on already present raw files.
-    """
-    if not MENDELEY_CASSAVA_URL:
-        print(
-            "MENDELEY_CASSAVA_URL not set; skipping direct cassava download and"
-            " searching existing raw files instead."
-        )
-        return True
-
-    zip_path = RAW_DIR / "mendeley_cassava.zip"
-    print(f"Downloading Mendeley cassava data from URL to {zip_path}...")
+def download_kaggle_competition(competition_name: str) -> bool:
+    print(f"Downloading competition {competition_name}...")
 
     try:
-        urllib.request.urlretrieve(MENDELEY_CASSAVA_URL, zip_path)
-    except Exception as exc:
-        print("Warning: failed to download Mendeley cassava archive.")
-        print(f"Download error: {exc}")
+        subprocess.run(
+            [
+                "kaggle",
+                "competitions",
+                "download",
+                "-c",
+                competition_name,
+                "-p",
+                str(RAW_DIR),
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Warning: failed to download competition '{competition_name}'.")
+        print("Tip: open the competition page and accept rules before downloading.")
+        print(f"Kaggle CLI error: {exc}")
         return False
 
-    try:
+    zip_files = list(RAW_DIR.glob("*.zip"))
+    if not zip_files:
+        print(f"Warning: no zip files found in {RAW_DIR} after competition download.")
+        return False
+
+    for zip_path in zip_files:
+        print(f"Extracting {zip_path.name}...")
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(RAW_DIR)
-        return True
-    except zipfile.BadZipFile as exc:
-        print("Warning: downloaded Mendeley cassava archive is not a valid zip.")
-        print(f"Zip error: {exc}")
-        return False
+
+    return True
 
 
 def get_image_files(folder: Path) -> list[Path]:
@@ -376,7 +378,7 @@ def main() -> None:
     clear_processed_dir()
 
     plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
-    cassava_download_ok = download_mendeley_cassava()
+    cassava_ok = download_kaggle_competition(CASSAVA_COMPETITION)
 
     if plantvillage_ok:
         print("\nPreparing PlantVillage classes...")
@@ -384,13 +386,9 @@ def main() -> None:
     else:
         print("\nSkipping PlantVillage preparation due to download failure.")
 
-    if cassava_download_ok:
+    if cassava_ok:
         print("\nPreparing cassava classes...")
-        try:
-            prepare_cassava()
-        except FileNotFoundError as exc:
-            print(f"Warning: {exc}")
-            print("Skipping cassava preparation.")
+        prepare_cassava()
     else:
         print("\nSkipping cassava preparation due to download failure.")
 
