@@ -1,6 +1,6 @@
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
-from transforms import get_train_transforms, get_eval_transforms
+from src.transforms import get_train_transforms, get_eval_transforms
 
 def build_dataloaders(
     train_dir,
