@@ -36,7 +36,7 @@ Run this in a Colab notebook (GPU runtime):
 !pip install -r requirements.txt
 ```
 
-Set Kaggle credentials:
+Set Kaggle credentials (needed for PlantVillage Kaggle dataset download):
 
 ```python
 import os
@@ -52,10 +52,12 @@ Prepare dataset and train:
 ```
 
 
-## Kaggle cassava fix (important)
-- Cassava is a **Kaggle competition** (`cassava-leaf-disease-classification`), not a normal dataset endpoint.
-- The prep script now uses `kaggle competitions download -c cassava-leaf-disease-classification` and auto-extracts zip files.
-- If you still get 403, open the competition page in your browser and accept the rules with the same Kaggle account used in Colab.
+## Cassava source (Mendeley/folder-based)
+- Cassava no longer depends on Kaggle competition access in this flow.
+- Optional: set `MENDELEY_CASSAVA_URL` in Colab to auto-download a cassava zip archive.
+- If `MENDELEY_CASSAVA_URL` is not set, the script searches `data/raw` for either:
+  - `train.csv` + `train_images`, or
+  - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
 
 ## Nice-to-have improvements for best Colab UX
 - Pin versions in `requirements.txt` for reproducibility.
@@ -67,3 +69,4 @@ Prepare dataset and train:
 ## Bottom line
 - **Suitable for training on Colab after small setup steps.**
 - With the import fix in this commit, the core train pipeline should run more reliably from a standard Colab working directory.
+
