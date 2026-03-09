@@ -49,6 +49,7 @@ Prepare dataset and train:
 ```bash
 !python -m src.prepare_dataset
 !python -m src.train
+!python -m src.evaluate
 ```
 
 
