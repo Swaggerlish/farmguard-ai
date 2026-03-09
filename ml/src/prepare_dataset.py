@@ -1,3 +1,4 @@
+import os
 import random
 import shutil
 import subprocess
@@ -24,11 +25,23 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 random.seed(RANDOM_SEED)
 
+
+def normalize_name(name: str) -> str:
+    normalized = name.lower()
+    for ch in [" ", "-", ",", "(", ")", "__", "___"]:
+        normalized = normalized.replace(ch, "_")
+    while "__" in normalized:
+        normalized = normalized.replace("__", "_")
+    return normalized.strip("_")
+
+
 PLANTVILLAGE_CLASS_MAP = {
+    # maize
     "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot": "maize_cercospora_leaf_spot",
     "Corn_(maize)___Common_rust_": "maize_common_rust",
     "Corn_(maize)___Northern_Leaf_Blight": "maize_northern_leaf_blight",
     "Corn_(maize)___healthy": "maize_healthy",
+    # tomato (original naming)
     "Tomato___Early_blight": "tomato_early_blight",
     "Tomato___Late_blight": "tomato_late_blight",
     "Tomato___Septoria_leaf_spot": "tomato_septoria_leaf_spot",
@@ -36,8 +49,19 @@ PLANTVILLAGE_CLASS_MAP = {
     "Tomato___Tomato_mosaic_virus": "tomato_mosaic_virus",
     "Tomato___Tomato_Yellow_Leaf_Curl_Virus": "tomato_yellow_leaf_curl_virus",
     "Tomato___healthy": "tomato_healthy",
+    # tomato (observed variant naming)
+    "Tomato_Early_blight": "tomato_early_blight",
+    "Tomato_Late_blight": "tomato_late_blight",
+    "Tomato_Septoria_leaf_spot": "tomato_septoria_leaf_spot",
+    "Tomato__Target_Spot": "tomato_target_spot",
+    "Tomato__Tomato_mosaic_virus": "tomato_mosaic_virus",
+    "Tomato__Tomato_YellowLeaf__Curl_Virus": "tomato_yellow_leaf_curl_virus",
+    "Tomato_healthy": "tomato_healthy",
+    # pepper
     "Pepper,_bell___Bacterial_spot": "pepper_bacterial_spot",
     "Pepper,_bell___healthy": "pepper_healthy",
+    "Pepper__bell___Bacterial_spot": "pepper_bacterial_spot",
+    "Pepper__bell___healthy": "pepper_healthy",
 }
 
 CASSAVA_LABEL_MAP = {
@@ -46,6 +70,20 @@ CASSAVA_LABEL_MAP = {
     2: "cassava_green_mite",
     3: "cassava_mosaic_disease",
     4: "cassava_healthy",
+}
+
+CASSAVA_CLASS_ALIASES = {
+    "cassava_bacterial_blight": "cassava_bacterial_blight",
+    "cassava_brown_streak_disease": "cassava_brown_streak_disease",
+    "cassava_green_mite": "cassava_green_mite",
+    "cassava_mosaic_disease": "cassava_mosaic_disease",
+    "cassava_healthy": "cassava_healthy",
+    # common short aliases in external datasets
+    "cbb": "cassava_bacterial_blight",
+    "cbsd": "cassava_brown_streak_disease",
+    "cgm": "cassava_green_mite",
+    "cmd": "cassava_mosaic_disease",
+    "healthy": "cassava_healthy",
 }
 
 
@@ -180,17 +218,21 @@ def process_class_images(image_paths: list[Path], class_name: str) -> None:
 
 
 def find_plantvillage_root() -> Path:
+    expected = {normalize_name(name) for name in PLANTVILLAGE_CLASS_MAP.keys()}
+    best_match: tuple[int, Path] | None = None
+
     for folder in RAW_DIR.rglob("*"):
         if not folder.is_dir():
             continue
 
-        child_dirs = {child.name for child in folder.iterdir() if child.is_dir()}
-        if (
-            "Corn_(maize)___healthy" in child_dirs
-            and "Tomato___Early_blight" in child_dirs
-            and "Pepper,_bell___healthy" in child_dirs
-        ):
-            return folder
+        child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
+        overlap = len(child_dirs & expected)
+
+        if overlap >= 3 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
 
     raise FileNotFoundError("Could not find PlantVillage root directory.")
 
@@ -202,7 +244,6 @@ def prepare_plantvillage() -> None:
     for source_class, target_class in PLANTVILLAGE_CLASS_MAP.items():
         source_dir = plantvillage_root / source_class
         if not source_dir.exists():
-            print(f"Warning: missing PlantVillage class folder: {source_dir}")
             continue
 
         image_paths = get_image_files(source_dir)
@@ -213,20 +254,34 @@ def prepare_plantvillage() -> None:
         process_class_images(image_paths, target_class)
 
 
-def find_cassava_assets() -> tuple[Path, Path]:
+def find_cassava_assets_csv() -> tuple[Path, Path] | None:
     csv_candidates = list(RAW_DIR.rglob("train.csv"))
     image_dir_candidates = [path for path in RAW_DIR.rglob("train_images") if path.is_dir()]
 
-    if not csv_candidates:
-        raise FileNotFoundError("Could not find cassava train.csv")
-    if not image_dir_candidates:
-        raise FileNotFoundError("Could not find cassava train_images directory")
+    if not csv_candidates or not image_dir_candidates:
+        return None
 
     return csv_candidates[0], image_dir_candidates[0]
 
 
-def prepare_cassava() -> None:
-    train_csv_path, train_images_dir = find_cassava_assets()
+def find_cassava_assets_folder() -> Path | None:
+    aliases = {normalize_name(k) for k in CASSAVA_CLASS_ALIASES.keys()}
+
+    best_match: tuple[int, Path] | None = None
+    for folder in RAW_DIR.rglob("*"):
+        if not folder.is_dir():
+            continue
+
+        child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
+        overlap = len(child_dirs & aliases)
+
+        if overlap >= 3 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    return best_match[1] if best_match else None
+
+
+def prepare_cassava_from_csv(train_csv_path: Path, train_images_dir: Path) -> None:
     print(f"Using cassava CSV: {train_csv_path}")
     print(f"Using cassava images dir: {train_images_dir}")
 
@@ -250,6 +305,50 @@ def prepare_cassava() -> None:
             continue
 
         process_class_images(image_paths, class_name)
+
+
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected either train.csv + train_images "
+        "or class-folder formatted cassava dataset in data/raw."
+    )
 
 
 def print_dataset_summary() -> None:
