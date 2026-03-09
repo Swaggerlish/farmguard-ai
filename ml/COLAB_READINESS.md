@@ -51,12 +51,6 @@ Prepare dataset and train:
 !python -m src.train
 ```
 
-
-## Kaggle cassava fix (important)
-- Cassava is a **Kaggle competition** (`cassava-leaf-disease-classification`), not a normal dataset endpoint.
-- The prep script now uses `kaggle competitions download -c cassava-leaf-disease-classification` and auto-extracts zip files.
-- If you still get 403, open the competition page in your browser and accept the rules with the same Kaggle account used in Colab.
-
 ## Nice-to-have improvements for best Colab UX
 - Pin versions in `requirements.txt` for reproducibility.
 - Add checkpoint resume support (for interrupted Colab sessions).
