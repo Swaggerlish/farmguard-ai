@@ -65,6 +65,12 @@ PLANTVILLAGE_CLASS_MAP = {
     "Pepper__bell___healthy": "pepper_healthy",
 }
 
+
+
+PLANTVILLAGE_NORMALIZED_MAP = {
+    normalize_name(source): target
+    for source, target in PLANTVILLAGE_CLASS_MAP.items()
+}
 CASSAVA_LABEL_MAP = {
     0: "cassava_bacterial_blight",
     1: "cassava_brown_streak_disease",
@@ -239,17 +245,32 @@ def prepare_plantvillage() -> None:
     plantvillage_root = find_plantvillage_root()
     print(f"Using PlantVillage root: {plantvillage_root}")
 
-    for source_class, target_class in PLANTVILLAGE_CLASS_MAP.items():
-        source_dir = plantvillage_root / source_class
-        if not source_dir.exists():
+    class_to_images: dict[str, list[Path]] = {}
+
+    for class_dir in sorted(plantvillage_root.iterdir()):
+        if not class_dir.is_dir():
             continue
 
-        image_paths = get_image_files(source_dir)
+        normalized = normalize_name(class_dir.name)
+        target_class = PLANTVILLAGE_NORMALIZED_MAP.get(normalized)
+        if not target_class:
+            continue
+
+        image_paths = get_image_files(class_dir)
         if not image_paths:
-            print(f"Warning: no images found in {source_dir}")
+            print(f"Warning: no images found in {class_dir}")
             continue
 
-        process_class_images(image_paths, target_class)
+        class_to_images.setdefault(target_class, []).extend(image_paths)
+
+    if not class_to_images:
+        raise FileNotFoundError(
+            "No PlantVillage class folders matched expected mappings under detected root."
+        )
+
+    for target_class, image_paths in sorted(class_to_images.items()):
+        unique_paths = sorted(set(image_paths))
+        process_class_images(unique_paths, target_class)
 
 
 def find_cassava_assets_csv() -> tuple[Path, Path] | None:
