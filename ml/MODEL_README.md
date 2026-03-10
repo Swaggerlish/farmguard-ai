@@ -22,6 +22,7 @@ Default output artifacts:
 Dataset preparation is implemented in `src/prepare_dataset.py`:
 - PlantVillage source via Kaggle dataset download.
 - Cassava source via KaggleHub dataset download (`visalakshiiyer/cassava-image-dataset`) and/or local raw folder discovery.
+- For custom folder datasets, preferred class folder names are: `cbb`, `cbsd`, `cgm`, `cmd`, `healthy`.
 - Robust folder-name normalization/mapping for variant class names.
 - Processed split output to:
   - `data/processed/train`

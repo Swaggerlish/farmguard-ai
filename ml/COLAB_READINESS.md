@@ -67,6 +67,8 @@ os.environ["CASSAVA_KAGGLEHUB_DATASET"] = "visalakshiiyer/cassava-image-dataset"
   - `train.csv` + `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
 
+If your folders are verbose names (for example `Cassava CB (Cassava Blight)`), rename them to `cbb`, `cmd`, `healthy` for best compatibility.
+
 ## Nice-to-have improvements for best Colab UX
 - Pin versions in `requirements.txt` for reproducibility.
 - Add checkpoint resume support (for interrupted Colab sessions).

@@ -91,6 +91,10 @@ CASSAVA_CLASS_ALIASES = {
     "cgm": "cassava_green_mite",
     "cmd": "cassava_mosaic_disease",
     "healthy": "cassava_healthy",
+    # verbose folder names seen in manually downloaded datasets
+    "cassava_cb_cassava_blight": "cassava_bacterial_blight",
+    "cassava_cm_cassava_mosaic": "cassava_mosaic_disease",
+    "cassava_healthy_leaf": "cassava_healthy",
 }
 
 
@@ -162,6 +166,19 @@ def download_kagglehub_cassava() -> bool:
     else:
         destination.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, destination / source_path.name)
+
+    # Some kagglehub datasets may include zipped assets; extract them for discovery.
+    for archive_path in destination.rglob("*.zip"):
+        extract_dir = archive_path.parent / archive_path.stem
+        if extract_dir.exists():
+            continue
+        try:
+            import zipfile
+            with zipfile.ZipFile(archive_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+            print(f"Extracted {archive_path} -> {extract_dir}")
+        except Exception as exc:
+            print(f"Warning: failed to extract {archive_path}: {exc}")
 
     print(f"Cassava dataset downloaded to: {destination}")
     return True
@@ -239,7 +256,7 @@ def find_plantvillage_root() -> Path:
         child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
         overlap = len(child_dirs & expected)
 
-        if overlap >= 3 and (best_match is None or overlap > best_match[0]):
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
             best_match = (overlap, folder)
 
     if best_match:
@@ -301,7 +318,7 @@ def find_cassava_assets_folder() -> Path | None:
         child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
         overlap = len(child_dirs & aliases)
 
-        if overlap >= 3 and (best_match is None or overlap > best_match[0]):
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
             best_match = (overlap, folder)
 
     return best_match[1] if best_match else None
@@ -373,7 +390,8 @@ def prepare_cassava() -> None:
 
     raise FileNotFoundError(
         "Could not find cassava assets. Expected either train.csv + train_images "
-        "or class-folder formatted cassava dataset in data/raw."
+        "or class-folder formatted cassava dataset in data/raw. "
+        "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
     )
 
 
