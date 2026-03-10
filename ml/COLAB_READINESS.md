@@ -53,10 +53,17 @@ Prepare dataset and train:
 ```
 
 
-## Cassava source (Mendeley/folder-based)
-- Cassava no longer depends on Kaggle competition access in this flow.
-- Optional: set `MENDELEY_CASSAVA_URL` in Colab to auto-download a cassava zip archive.
-- If `MENDELEY_CASSAVA_URL` is not set, the script searches `data/raw` for either:
+## Cassava source (KaggleHub/folder-based)
+- Cassava now uses KaggleHub dataset download (non-competition flow) by default.
+- Default dataset: `visalakshiiyer/cassava-image-dataset`.
+- Optional override in Colab:
+
+```python
+import os
+os.environ["CASSAVA_KAGGLEHUB_DATASET"] = "visalakshiiyer/cassava-image-dataset"
+```
+
+- If download fails or you prefer manual upload, the script searches `data/raw` for either:
   - `train.csv` + `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
 
@@ -65,7 +72,7 @@ Prepare dataset and train:
 - Add checkpoint resume support (for interrupted Colab sessions).
 - Wire `configs/train_config.yaml` into `src/train.py`.
 - Save outputs to Google Drive mount (`/content/drive/MyDrive/...`).
-- Add an evaluation/inference CLI (currently `evaluate.py` and `infer.py` are empty placeholders).
+- Keep `src/evaluate.py` and `src/infer.py` as the standard evaluation/inference entrypoints.
 
 ## Bottom line
 - **Suitable for training on Colab after small setup steps.**

@@ -21,7 +21,7 @@ Default output artifacts:
 ## Dataset Preparation
 Dataset preparation is implemented in `src/prepare_dataset.py`:
 - PlantVillage source via Kaggle dataset download.
-- Cassava source via optional `MENDELEY_CASSAVA_URL` and/or local raw folder discovery.
+- Cassava source via KaggleHub dataset download (`visalakshiiyer/cassava-image-dataset`) and/or local raw folder discovery.
 - Robust folder-name normalization/mapping for variant class names.
 - Processed split output to:
   - `data/processed/train`
@@ -59,6 +59,8 @@ From `ml/` directory:
 
 ```bash
 pip install -r requirements.txt
+# optional override if you want another KaggleHub cassava dataset
+# export CASSAVA_KAGGLEHUB_DATASET="visalakshiiyer/cassava-image-dataset"
 python -m src.prepare_dataset
 python -m src.train
 python -m src.evaluate

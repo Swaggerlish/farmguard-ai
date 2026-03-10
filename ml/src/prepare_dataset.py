@@ -14,7 +14,7 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 PLANTVILLAGE_DATASET = "emmarex/plantdisease"
-MENDELEY_CASSAVA_URL = os.getenv("MENDELEY_CASSAVA_URL", "")
+CASSAVA_KAGGLEHUB_DATASET = os.getenv("CASSAVA_KAGGLEHUB_DATASET", "visalakshiiyer/cassava-image-dataset")
 
 RANDOM_SEED = 42
 TRAIN_RATIO = 0.70
@@ -128,36 +128,43 @@ def download_kaggle_dataset(dataset_name: str) -> bool:
         return False
 
 
-def download_mendeley_cassava() -> bool:
+def download_kagglehub_cassava() -> bool:
     """
-    Download cassava data from Mendeley when MENDELEY_CASSAVA_URL is provided.
-    If URL is not provided, we continue and rely on already present raw files.
+    Download cassava data via kagglehub dataset API (non-competition flow).
+    If this fails, we continue and rely on already present files in data/raw.
     """
-    if not MENDELEY_CASSAVA_URL:
-        print(
-            "MENDELEY_CASSAVA_URL not set; skipping direct cassava download and"
-            " searching existing raw files instead."
-        )
-        return True
-
-    zip_path = RAW_DIR / "mendeley_cassava.zip"
-    print(f"Downloading Mendeley cassava data from URL to {zip_path}...")
+    print(f"Downloading cassava dataset via kagglehub: {CASSAVA_KAGGLEHUB_DATASET}")
 
     try:
-        urllib.request.urlretrieve(MENDELEY_CASSAVA_URL, zip_path)
+        import kagglehub
+    except ImportError:
+        print("Warning: kagglehub is not installed; skipping cassava auto-download.")
+        print("Run 'pip install kagglehub' or rely on manually uploaded cassava files in data/raw.")
+        return True
+
+    try:
+        source_path = Path(kagglehub.dataset_download(CASSAVA_KAGGLEHUB_DATASET))
     except Exception as exc:
-        print("Warning: failed to download Mendeley cassava archive.")
-        print(f"Download error: {exc}")
-        return False
-
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(RAW_DIR)
+        print("Warning: failed to download cassava dataset via kagglehub.")
+        print(f"kagglehub error: {exc}")
         return True
-    except zipfile.BadZipFile as exc:
-        print("Warning: downloaded Mendeley cassava archive is not a valid zip.")
-        print(f"Zip error: {exc}")
-        return False
+
+    if not source_path.exists():
+        print(f"Warning: kagglehub returned missing path: {source_path}")
+        return True
+
+    destination = RAW_DIR / "kagglehub_cassava"
+    if destination.exists():
+        shutil.rmtree(destination)
+
+    if source_path.is_dir():
+        shutil.copytree(source_path, destination)
+    else:
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination / source_path.name)
+
+    print(f"Cassava dataset downloaded to: {destination}")
+    return True
 
 
 def get_image_files(folder: Path) -> list[Path]:
@@ -397,7 +404,7 @@ def main() -> None:
     clear_processed_dir()
 
     plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
-    cassava_download_ok = download_mendeley_cassava()
+    cassava_download_ok = download_kagglehub_cassava()
 
     if plantvillage_ok:
         print("\nPreparing PlantVillage classes...")
