@@ -2,6 +2,8 @@ import os
 import random
 import shutil
 import subprocess
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import pandas as pd
