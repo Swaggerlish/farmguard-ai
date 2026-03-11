@@ -2,6 +2,7 @@ import os
 import random
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -19,7 +20,7 @@ TRAIN_RATIO = 0.70
 VAL_RATIO = 0.15
 TEST_RATIO = 0.15
 
-MAX_IMAGES_PER_CLASS = 600  # helps training finish faster
+MAX_IMAGES_PER_CLASS = 600
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 random.seed(RANDOM_SEED)
@@ -231,12 +232,17 @@ def copy_split(paths: list[Path], split_name: str, class_name: str) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for img_path in paths:
-        shutil.copy2(img_path, target_dir / img_path.name)
+        destination = target_dir / img_path.name
+
+        # Avoid overwriting if duplicate filenames exist.
+        if destination.exists():
+            destination = target_dir / f"{img_path.stem}_{abs(hash(str(img_path)))}{img_path.suffix}"
+
+        shutil.copy2(img_path, destination)
 
 
 def process_class_images(image_paths: list[Path], class_name: str) -> None:
     image_paths = sample_images(image_paths, MAX_IMAGES_PER_CLASS)
-
     train_paths, val_paths, test_paths = split_image_paths(image_paths)
 
     copy_split(train_paths, "train", class_name)
@@ -266,7 +272,18 @@ def find_plantvillage_root() -> Path:
     if best_match:
         return best_match[1]
 
-    raise FileNotFoundError("Could not find PlantVillage root directory.")
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
+
+    if best_match:
+        return best_match[2]
+
+    raise FileNotFoundError(
+        "Could not find a PlantVillage root containing maize/corn folders."
+    )
 
 
 def prepare_plantvillage() -> None:
@@ -308,7 +325,9 @@ def find_cassava_assets_csv() -> tuple[Path, Path] | None:
     if not csv_candidates or not image_dir_candidates:
         return None
 
-    return csv_candidates[0], image_dir_candidates[0]
+    for target_class, image_paths in sorted(class_to_images.items()):
+        unique_paths = sorted(set(image_paths))
+        process_class_images(unique_paths, target_class)
 
 
 def find_cassava_assets_folder() -> Path | None:
@@ -338,9 +357,11 @@ def prepare_cassava_from_csv(train_csv_path: Path, train_images_dir: Path) -> No
     if not required_columns.issubset(df.columns):
         raise ValueError(f"Cassava CSV must contain columns: {required_columns}")
 
+    found_classes: set[str] = set()
+
     for label_id, class_name in CASSAVA_LABEL_MAP.items():
         class_df = df[df["label"] == label_id]
-        image_paths = []
+        image_paths: list[Path] = []
 
         for image_id in class_df["image_id"].tolist():
             img_path = train_images_dir / image_id
@@ -351,7 +372,60 @@ def prepare_cassava_from_csv(train_csv_path: Path, train_images_dir: Path) -> No
             print(f"Warning: no cassava images found for class {class_name}")
             continue
 
+        found_classes.add(class_name)
         process_class_images(image_paths, class_name)
+
+    missing_classes = REQUIRED_CASSAVA_CLASSES - found_classes
+    if missing_classes:
+        raise RuntimeError(
+            "Cassava competition dataset is missing required classes: "
+            f"{sorted(missing_classes)}"
+        )
+
+
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected either train.csv + train_images "
+        "or class-folder formatted cassava dataset in data/raw. "
+        "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
+    )
 
 
 def prepare_cassava_from_folders(cassava_root: Path) -> None:
@@ -408,7 +482,7 @@ def print_dataset_summary() -> None:
             continue
 
         total_images = 0
-        class_counts = {}
+        class_counts: dict[str, int] = {}
 
         for class_dir in sorted(split_dir.iterdir()):
             if class_dir.is_dir():
@@ -422,6 +496,9 @@ def print_dataset_summary() -> None:
 
 
 def main() -> None:
+    print(f"PLANTVILLAGE_DATASET in use: {PLANTVILLAGE_DATASET}")
+    print(f"CASSAVA_COMPETITION in use: {CASSAVA_COMPETITION}")
+
     ensure_dirs()
     clear_processed_dir()
 
@@ -445,7 +522,7 @@ def main() -> None:
         print("\nSkipping cassava preparation due to download failure.")
 
     print_dataset_summary()
-    print(f"\nDataset preparation complete.")
+    print("\nDataset preparation complete.")
     print(f"Processed dataset saved to: {PROCESSED_DIR.resolve()}")
 
 
