@@ -18,9 +18,21 @@ Default output artifacts:
 - `outputs/checkpoints/best_model.pth`
 - `outputs/checkpoints/class_to_idx.json`
 
+## Dataset Choice and Access Rationale
+- **PlantVillage (Kaggle dataset: `abdallahalidev/plantvillage-dataset`)** is used for tomato/maize/pepper/corn classes.
+- **Cassava Disease (Kaggle competition data, manually downloaded)** is used for cassava classes.
+
+### Why cassava was downloaded manually
+Automated cassava download in notebook/runtime can fail when competition access is restricted by authentication/rules acceptance in the execution environment. To keep training reproducible, cassava files were downloaded manually from Kaggle and then uploaded to the runtime before preparation.
+
+### Expected manual cassava layout
+After upload/extraction, cassava data should be placed under `data/raw` in one of these supported formats:
+- `train.csv` + `train_images/`
+- class folders (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`) or equivalent verbose names handled by alias mapping in `prepare_dataset.py`.
+
 ## Dataset Preparation
 Dataset preparation is implemented in `src/prepare_dataset.py`:
-- PlantVillage source via Kaggle dataset download.
+- PlantVillage source via Kaggle dataset download (`abdallahalidev/plantvillage-dataset`).
 - Cassava source via KaggleHub dataset download (`visalakshiiyer/cassava-image-dataset`) and/or local raw folder discovery.
 - For custom folder datasets, preferred class folder names are: `cbb`, `cbsd`, `cgm`, `cmd`, `healthy`.
 - Robust folder-name normalization/mapping for variant class names.
