@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
-PLANTVILLAGE_DATASET = "emmarex/plantdisease"
+PLANTVILLAGE_DATASET = "abdallahalidev/plantvillage-dataset"
 CASSAVA_KAGGLEHUB_DATASET = os.getenv("CASSAVA_KAGGLEHUB_DATASET", "visalakshiiyer/cassava-image-dataset")
 
 RANDOM_SEED = 42

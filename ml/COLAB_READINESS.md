@@ -36,7 +36,7 @@ Run this in a Colab notebook (GPU runtime):
 !pip install -r requirements.txt
 ```
 
-Set Kaggle credentials (needed for PlantVillage Kaggle dataset download):
+Set Kaggle credentials (needed for PlantVillage Kaggle dataset download `abdallahalidev/plantvillage-dataset`):
 
 ```python
 import os
