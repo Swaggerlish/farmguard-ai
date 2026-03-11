@@ -53,21 +53,17 @@ Prepare dataset and train:
 ```
 
 
-## Cassava source (KaggleHub/folder-based)
-- Cassava now uses KaggleHub dataset download (non-competition flow) by default.
-- Default dataset: `visalakshiiyer/cassava-image-dataset`.
-- Optional override in Colab:
-
-```python
-import os
-os.environ["CASSAVA_KAGGLEHUB_DATASET"] = "visalakshiiyer/cassava-image-dataset"
-```
-
-- If download fails or you prefer manual upload, the script searches `data/raw` for either:
+## Cassava source (manual Kaggle competition upload)
+- Primary workflow: manually download cassava competition data from Kaggle website and upload/extract to `data/raw`.
+- The preparation script first tries to discover cassava assets already in `data/raw`.
+- Supported layouts:
   - `train.csv` + `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
 
 If your folders are verbose names (for example `Cassava CB (Cassava Blight)`), rename them to `cbb`, `cmd`, `healthy` for best compatibility.
+
+Optional (advanced): set `CASSAVA_KAGGLEHUB_DATASET` only if you want non-competition cassava auto-download.
+
 
 ## Nice-to-have improvements for best Colab UX
 - Pin versions in `requirements.txt` for reproducibility.

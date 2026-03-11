@@ -33,8 +33,9 @@ After upload/extraction, cassava data should be placed under `data/raw` in one o
 ## Dataset Preparation
 Dataset preparation is implemented in `src/prepare_dataset.py`:
 - PlantVillage source via Kaggle dataset download (`abdallahalidev/plantvillage-dataset`).
-- Cassava source via KaggleHub dataset download (`visalakshiiyer/cassava-image-dataset`) and/or local raw folder discovery.
+- Cassava source is **manually downloaded Kaggle competition data** uploaded into `data/raw` (primary workflow).
 - For custom folder datasets, preferred class folder names are: `cbb`, `cbsd`, `cgm`, `cmd`, `healthy`.
+- Optional: set `CASSAVA_KAGGLEHUB_DATASET` only if you want non-competition cassava auto-download.
 - Robust folder-name normalization/mapping for variant class names.
 - Processed split output to:
   - `data/processed/train`
@@ -72,8 +73,8 @@ From `ml/` directory:
 
 ```bash
 pip install -r requirements.txt
-# optional override if you want another KaggleHub cassava dataset
-# export CASSAVA_KAGGLEHUB_DATASET="visalakshiiyer/cassava-image-dataset"
+# optional ONLY if you want non-competition cassava auto-download
+# export CASSAVA_KAGGLEHUB_DATASET="<owner/dataset-slug>"
 python -m src.prepare_dataset
 python -m src.train
 python -m src.evaluate

@@ -13,7 +13,7 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 PLANTVILLAGE_DATASET = "abdallahalidev/plantvillage-dataset"
-CASSAVA_KAGGLEHUB_DATASET = os.getenv("CASSAVA_KAGGLEHUB_DATASET", "visalakshiiyer/cassava-image-dataset")
+CASSAVA_KAGGLEHUB_DATASET = os.getenv("CASSAVA_KAGGLEHUB_DATASET", "")
 
 RANDOM_SEED = 42
 TRAIN_RATIO = 0.70
@@ -133,9 +133,15 @@ def download_kaggle_dataset(dataset_name: str) -> bool:
 
 def download_kagglehub_cassava() -> bool:
     """
-    Download cassava data via kagglehub dataset API (non-competition flow).
-    If this fails, we continue and rely on already present files in data/raw.
+    Optional cassava download via kagglehub dataset API (non-competition flow).
+    If not configured or if it fails, we continue and rely on manually uploaded
+    cassava files in data/raw.
     """
+    if not CASSAVA_KAGGLEHUB_DATASET:
+        print("CASSAVA_KAGGLEHUB_DATASET not set; skipping cassava auto-download.")
+        print("Using manually uploaded cassava assets from data/raw when available.")
+        return True
+
     print(f"Downloading cassava dataset via kagglehub: {CASSAVA_KAGGLEHUB_DATASET}")
 
     try:
@@ -259,6 +265,12 @@ def find_plantvillage_root() -> Path:
 
         child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
         overlap = len(child_dirs & expected)
+
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
 
         if overlap >= 2 and (best_match is None or overlap > best_match[0]):
             best_match = (overlap, folder)
@@ -416,6 +428,51 @@ def prepare_cassava() -> None:
     )
 
 
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected either train.csv + train_images "
+        "or class-folder formatted cassava dataset in data/raw. "
+        "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
+    )
+
+
 def print_dataset_summary() -> None:
     print("\nFinal dataset summary:")
     for split_name in ["train", "val", "test"]:
@@ -444,7 +501,6 @@ def main() -> None:
 
     ensure_dirs()
     clear_processed_dir()
-    clear_previous_raw_downloads()
 
     plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
     cassava_download_ok = download_kagglehub_cassava()
