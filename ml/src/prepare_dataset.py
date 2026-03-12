@@ -23,6 +23,53 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 random.seed(RANDOM_SEED)
 
+
+def normalize_name(name: str) -> str:
+    normalized = name.lower()
+    for ch in [" ", "-", ",", "(", ")", "[", "]"]:
+        normalized = normalized.replace(ch, "_")
+    while "__" in normalized:
+        normalized = normalized.replace("__", "_")
+    return normalized.strip("_")
+
+
+PLANTVILLAGE_CLASS_MAP = {
+    # maize
+    "Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot": "maize_cercospora_leaf_spot",
+    "Corn_(maize)___Common_rust_": "maize_common_rust",
+    "Corn_(maize)___Northern_Leaf_Blight": "maize_northern_leaf_blight",
+    "Corn_(maize)___healthy": "maize_healthy",
+
+    # tomato
+    "Tomato___Early_blight": "tomato_early_blight",
+    "Tomato___Late_blight": "tomato_late_blight",
+    "Tomato___Septoria_leaf_spot": "tomato_septoria_leaf_spot",
+    "Tomato___Target_Spot": "tomato_target_spot",
+    "Tomato___Tomato_mosaic_virus": "tomato_mosaic_virus",
+    "Tomato___Tomato_Yellow_Leaf_Curl_Virus": "tomato_yellow_leaf_curl_virus",
+    "Tomato___healthy": "tomato_healthy",
+
+    # alternate tomato spellings
+    "Tomato_Early_blight": "tomato_early_blight",
+    "Tomato_Late_blight": "tomato_late_blight",
+    "Tomato_Septoria_leaf_spot": "tomato_septoria_leaf_spot",
+    "Tomato__Target_Spot": "tomato_target_spot",
+    "Tomato__Tomato_mosaic_virus": "tomato_mosaic_virus",
+    "Tomato__Tomato_YellowLeaf__Curl_Virus": "tomato_yellow_leaf_curl_virus",
+    "Tomato_healthy": "tomato_healthy",
+
+    # pepper
+    "Pepper,_bell___Bacterial_spot": "pepper_bacterial_spot",
+    "Pepper,_bell___healthy": "pepper_healthy",
+    "Pepper__bell___Bacterial_spot": "pepper_bacterial_spot",
+    "Pepper__bell___healthy": "pepper_healthy",
+}
+
+PLANTVILLAGE_NORMALIZED_MAP = {
+    normalize_name(source): target
+    for source, target in PLANTVILLAGE_CLASS_MAP.items()
+}
+
 CASSAVA_LABEL_MAP = {
     0: "cassava_bacterial_blight",
     1: "cassava_brown_streak_disease",
@@ -45,15 +92,6 @@ CASSAVA_CLASS_ALIASES = {
     "cmd": "cassava_mosaic_disease",
     "healthy": "cassava_healthy",
 }
-
-
-def normalize_name(name: str) -> str:
-    normalized = name.lower()
-    for ch in [" ", "-", ",", "(", ")", "__", "___"]:
-        normalized = normalized.replace(ch, "_")
-    while "__" in normalized:
-        normalized = normalized.replace("__", "_")
-    return normalized.strip("_")
 
 
 def ensure_dirs() -> None:
@@ -109,8 +147,8 @@ def download_kaggle_competition() -> bool:
             try:
                 shutil.unpack_archive(str(archive_path), str(RAW_DIR))
                 print(f"Extracted {archive_path}")
-            except Exception as exc:
-                print(f"Warning: could not extract {archive_path}: {exc}")
+            except Exception:
+                pass
 
         return True
     except Exception as exc:
@@ -144,7 +182,6 @@ def split_image_paths(image_paths: list[Path]) -> tuple[list[Path], list[Path], 
     )
 
     relative_test_size = TEST_RATIO / (VAL_RATIO + TEST_RATIO)
-
     val_paths, test_paths = train_test_split(
         temp_paths,
         test_size=relative_test_size,
@@ -206,8 +243,11 @@ def score_csv_candidate(csv_path: Path, image_dir: Path) -> int:
     except Exception:
         pass
 
-    depth_penalty = len(csv_path.relative_to(RAW_DIR).parts)
-    score -= depth_penalty
+    try:
+        depth_penalty = len(csv_path.relative_to(RAW_DIR).parts)
+        score -= depth_penalty
+    except Exception:
+        pass
 
     return score
 
@@ -228,7 +268,7 @@ def find_cassava_assets_csv() -> tuple[Path, Path] | None:
         return None
 
     _, csv_path, image_dir = best_match
-    print(f"Detected cassava CSV dataset:")
+    print("Detected cassava CSV dataset:")
     print(f"  CSV: {csv_path}")
     print(f"  Images: {image_dir}")
     return csv_path, image_dir
@@ -347,6 +387,73 @@ def prepare_cassava() -> None:
     )
 
 
+def find_plantvillage_root() -> Path | None:
+    expected = set(PLANTVILLAGE_NORMALIZED_MAP.keys())
+    best_match: tuple[int, Path] | None = None
+
+    for folder in RAW_DIR.rglob("*"):
+        if not folder.is_dir():
+            continue
+
+        child_dirs = [child for child in folder.iterdir() if child.is_dir()]
+        child_names = {normalize_name(child.name) for child in child_dirs}
+        overlap = len(child_names & expected)
+
+        if overlap < 2:
+            continue
+
+        image_count = 0
+        for child in child_dirs:
+            if normalize_name(child.name) in expected:
+                image_count += len(get_image_files(child))
+
+        score = overlap * 100 + image_count
+
+        if best_match is None or score > best_match[0]:
+            best_match = (score, folder)
+
+    if best_match:
+        print(f"Detected PlantVillage root: {best_match[1]}")
+        return best_match[1]
+
+    return None
+
+
+def prepare_plantvillage() -> None:
+    plantvillage_root = find_plantvillage_root()
+    if plantvillage_root is None:
+        raise FileNotFoundError(
+            "Could not find PlantVillage root under data/raw."
+        )
+
+    class_to_images: dict[str, list[Path]] = {}
+
+    for class_dir in sorted(plantvillage_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        normalized = normalize_name(class_dir.name)
+        target_class = PLANTVILLAGE_NORMALIZED_MAP.get(normalized)
+
+        if not target_class:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            print(f"Warning: no images found in {class_dir}")
+            continue
+
+        class_to_images.setdefault(target_class, []).extend(image_paths)
+
+    if not class_to_images:
+        raise FileNotFoundError(
+            "No PlantVillage class folders matched expected mappings."
+        )
+
+    for target_class, image_paths in sorted(class_to_images.items()):
+        process_class_images(image_paths, target_class)
+
+
 def print_dataset_summary() -> None:
     print("\nFinal dataset summary:")
     for split_name in ["train", "val", "test"]:
@@ -377,13 +484,25 @@ def main() -> None:
     clear_processed_dir()
 
     print("\nDownloading PlantVillage...")
-    download_kaggle_dataset(PLANTVILLAGE_DATASET)
+    plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
 
     print("\nDownloading Cassava competition...")
     download_kaggle_competition()
 
+    if plantvillage_ok:
+        print("\nPreparing PlantVillage dataset...")
+        try:
+            prepare_plantvillage()
+        except Exception as exc:
+            print(f"Warning: PlantVillage preparation failed: {exc}")
+    else:
+        print("\nSkipping PlantVillage preparation due to download failure.")
+
     print("\nPreparing cassava dataset...")
-    prepare_cassava()
+    try:
+        prepare_cassava()
+    except Exception as exc:
+        print(f"Warning: cassava preparation failed: {exc}")
 
     print_dataset_summary()
     print(f"\nDataset ready at: {PROCESSED_DIR.resolve()}")
