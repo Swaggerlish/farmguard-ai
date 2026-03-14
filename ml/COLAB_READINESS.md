@@ -48,7 +48,7 @@ Prepare dataset and train:
 
 ```bash
 !python -m src.prepare_dataset
-!python -m src.train
+!python -m src.train --img-size 300 --label-smoothing 0.05
 !python -m src.evaluate
 ```
 
@@ -76,3 +76,11 @@ Optional (advanced): set `CASSAVA_KAGGLEHUB_DATASET` only if you want non-compet
 - **Suitable for training on Colab after small setup steps.**
 - With the import fix in this commit, the core train pipeline should run more reliably from a standard Colab working directory.
 
+
+
+## Cross-source robustness tip
+For web/in-the-wild images, train with a larger input size and mild label smoothing:
+
+```bash
+!python -m src.train --img-size 300 --label-smoothing 0.05
+```

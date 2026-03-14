@@ -42,6 +42,23 @@ Dataset preparation is implemented in `src/prepare_dataset.py`:
   - `data/processed/val`
   - `data/processed/test`
 
+## Improving Cross-Source Prediction Quality
+If panelists will test with internet images, expect domain shift. Recommended training settings:
+
+```bash
+python -m src.train \
+  --img-size 300 \
+  --batch-size 24 \
+  --epochs-head 6 \
+  --epochs-ft 10 \
+  --label-smoothing 0.05
+```
+
+Notes:
+- `--img-size 300` keeps more lesion detail than 224 for small disease spots.
+- The transform pipeline now uses stronger augmentation and eval center-crop to reduce source bias.
+- If running on CPU, DataLoader pin-memory is now auto-disabled to avoid warnings.
+
 ## Evaluate the Model
 Evaluation CLI is implemented in `src/evaluate.py`.
 
@@ -76,7 +93,7 @@ pip install -r requirements.txt
 # optional ONLY if you want non-competition cassava auto-download
 # export CASSAVA_KAGGLEHUB_DATASET="<owner/dataset-slug>"
 python -m src.prepare_dataset
-python -m src.train
+python -m src.train --img-size 300 --label-smoothing 0.05
 python -m src.evaluate
 ```
 

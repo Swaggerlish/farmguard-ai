@@ -1,3 +1,4 @@
+import os
 import random
 import shutil
 import subprocess
@@ -11,7 +12,9 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 PLANTVILLAGE_DATASET = "abdallahalidev/plantvillage-dataset"
-CASSAVA_COMPETITION = "cassava-leaf-disease-classification"
+CASSAVA_KAGGLEHUB_DATASET = os.getenv("CASSAVA_KAGGLEHUB_DATASET", "")
+# Backward-compatibility env var retained to avoid NameError in older notebooks/scripts.
+CASSAVA_COMPETITION = os.getenv("CASSAVA_COMPETITION", "")
 
 RANDOM_SEED = 42
 TRAIN_RATIO = 0.70
@@ -26,7 +29,7 @@ random.seed(RANDOM_SEED)
 
 def normalize_name(name: str) -> str:
     normalized = name.lower()
-    for ch in [" ", "-", ",", "(", ")", "[", "]"]:
+    for ch in [" ", "-", ",", "(", ")", "__", "___"]:
         normalized = normalized.replace(ch, "_")
     while "__" in normalized:
         normalized = normalized.replace("__", "_")
@@ -39,8 +42,7 @@ PLANTVILLAGE_CLASS_MAP = {
     "Corn_(maize)___Common_rust_": "maize_common_rust",
     "Corn_(maize)___Northern_Leaf_Blight": "maize_northern_leaf_blight",
     "Corn_(maize)___healthy": "maize_healthy",
-
-    # tomato
+    # tomato (original naming)
     "Tomato___Early_blight": "tomato_early_blight",
     "Tomato___Late_blight": "tomato_late_blight",
     "Tomato___Septoria_leaf_spot": "tomato_septoria_leaf_spot",
@@ -48,8 +50,7 @@ PLANTVILLAGE_CLASS_MAP = {
     "Tomato___Tomato_mosaic_virus": "tomato_mosaic_virus",
     "Tomato___Tomato_Yellow_Leaf_Curl_Virus": "tomato_yellow_leaf_curl_virus",
     "Tomato___healthy": "tomato_healthy",
-
-    # alternate tomato spellings
+    # tomato (observed variant naming)
     "Tomato_Early_blight": "tomato_early_blight",
     "Tomato_Late_blight": "tomato_late_blight",
     "Tomato_Septoria_leaf_spot": "tomato_septoria_leaf_spot",
@@ -57,7 +58,6 @@ PLANTVILLAGE_CLASS_MAP = {
     "Tomato__Tomato_mosaic_virus": "tomato_mosaic_virus",
     "Tomato__Tomato_YellowLeaf__Curl_Virus": "tomato_yellow_leaf_curl_virus",
     "Tomato_healthy": "tomato_healthy",
-
     # pepper
     "Pepper,_bell___Bacterial_spot": "pepper_bacterial_spot",
     "Pepper,_bell___healthy": "pepper_healthy",
@@ -65,11 +65,12 @@ PLANTVILLAGE_CLASS_MAP = {
     "Pepper__bell___healthy": "pepper_healthy",
 }
 
+
+
 PLANTVILLAGE_NORMALIZED_MAP = {
     normalize_name(source): target
     for source, target in PLANTVILLAGE_CLASS_MAP.items()
 }
-
 CASSAVA_LABEL_MAP = {
     0: "cassava_bacterial_blight",
     1: "cassava_brown_streak_disease",
@@ -78,19 +79,22 @@ CASSAVA_LABEL_MAP = {
     4: "cassava_healthy",
 }
 
-REQUIRED_CASSAVA_CLASSES = set(CASSAVA_LABEL_MAP.values())
-
 CASSAVA_CLASS_ALIASES = {
     "cassava_bacterial_blight": "cassava_bacterial_blight",
     "cassava_brown_streak_disease": "cassava_brown_streak_disease",
     "cassava_green_mite": "cassava_green_mite",
     "cassava_mosaic_disease": "cassava_mosaic_disease",
     "cassava_healthy": "cassava_healthy",
+    # common short aliases in external datasets
     "cbb": "cassava_bacterial_blight",
     "cbsd": "cassava_brown_streak_disease",
     "cgm": "cassava_green_mite",
     "cmd": "cassava_mosaic_disease",
     "healthy": "cassava_healthy",
+    # verbose folder names seen in manually downloaded datasets
+    "cassava_cb_cassava_blight": "cassava_bacterial_blight",
+    "cassava_cm_cassava_mosaic": "cassava_mosaic_disease",
+    "cassava_healthy_leaf": "cassava_healthy",
 }
 
 
@@ -106,7 +110,7 @@ def clear_processed_dir() -> None:
 
 
 def download_kaggle_dataset(dataset_name: str) -> bool:
-    print(f"Downloading dataset: {dataset_name}")
+    print(f"Downloading dataset {dataset_name}...")
     try:
         subprocess.run(
             [
@@ -122,39 +126,68 @@ def download_kaggle_dataset(dataset_name: str) -> bool:
             check=True,
         )
         return True
-    except Exception as exc:
-        print(f"Warning: failed to download dataset '{dataset_name}': {exc}")
+    except subprocess.CalledProcessError as exc:
+        print(f"Warning: failed to download dataset '{dataset_name}'.")
+        print(f"Kaggle CLI error: {exc}")
         return False
 
 
-def download_kaggle_competition() -> bool:
-    print(f"Downloading cassava competition dataset: {CASSAVA_COMPETITION}")
-    try:
-        subprocess.run(
-            [
-                "kaggle",
-                "competitions",
-                "download",
-                "-c",
-                CASSAVA_COMPETITION,
-                "-p",
-                str(RAW_DIR),
-            ],
-            check=True,
-        )
-
-        for archive_path in RAW_DIR.glob("*.zip"):
-            try:
-                shutil.unpack_archive(str(archive_path), str(RAW_DIR))
-                print(f"Extracted {archive_path}")
-            except Exception:
-                pass
-
+def download_kagglehub_cassava() -> bool:
+    """
+    Optional cassava download via kagglehub dataset API (non-competition flow).
+    If not configured or if it fails, we continue and rely on manually uploaded
+    cassava files in data/raw.
+    """
+    if not CASSAVA_KAGGLEHUB_DATASET:
+        print("CASSAVA_KAGGLEHUB_DATASET not set; skipping cassava auto-download.")
+        print("Using manually uploaded cassava assets from data/raw when available.")
         return True
+
+    print(f"Downloading cassava dataset via kagglehub: {CASSAVA_KAGGLEHUB_DATASET}")
+
+    try:
+        import kagglehub
+    except ImportError:
+        print("Warning: kagglehub is not installed; skipping cassava auto-download.")
+        print("Run 'pip install kagglehub' or rely on manually uploaded cassava files in data/raw.")
+        return True
+
+    try:
+        source_path = Path(kagglehub.dataset_download(CASSAVA_KAGGLEHUB_DATASET))
     except Exception as exc:
-        print(f"Could not download cassava competition dataset: {exc}")
-        print("Will attempt to use manually uploaded data from data/raw.")
-        return False
+        print("Warning: failed to download cassava dataset via kagglehub.")
+        print(f"kagglehub error: {exc}")
+        return True
+
+    if not source_path.exists():
+        print(f"Warning: kagglehub returned missing path: {source_path}")
+        return True
+
+    destination = RAW_DIR / "kagglehub_cassava"
+    if destination.exists():
+        shutil.rmtree(destination)
+
+    if source_path.is_dir():
+        shutil.copytree(source_path, destination)
+    else:
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination / source_path.name)
+
+    # Some kagglehub datasets may include zipped assets; extract them for discovery.
+    for archive_path in destination.rglob("*.zip"):
+        extract_dir = archive_path.parent / archive_path.stem
+        if extract_dir.exists():
+            continue
+        try:
+            import zipfile
+            with zipfile.ZipFile(archive_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+            print(f"Extracted {archive_path} -> {extract_dir}")
+        except Exception as exc:
+            print(f"Warning: failed to extract {archive_path}: {exc}")
+
+    print(f"Cassava dataset downloaded to: {destination}")
+    return True
 
 
 def get_image_files(folder: Path) -> list[Path]:
@@ -221,11 +254,22 @@ def process_class_images(image_paths: list[Path], class_name: str) -> None:
     )
 
 
-def score_csv_candidate(csv_path: Path, image_dir: Path) -> int:
-    score = 0
+def find_plantvillage_root() -> Path:
+    expected = {normalize_name(name) for name in PLANTVILLAGE_CLASS_MAP.keys()}
+    best_match: tuple[int, Path] | None = None
 
-    if csv_path.parent == image_dir.parent:
-        score += 100
+    for folder in RAW_DIR.rglob("*"):
+        if not folder.is_dir():
+            continue
+
+        child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
+        overlap = len(child_dirs & expected)
+
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
 
     try:
         df = pd.read_csv(csv_path, nrows=20)
@@ -251,59 +295,59 @@ def score_csv_candidate(csv_path: Path, image_dir: Path) -> int:
 
     return score
 
+    class_to_images: dict[str, list[Path]] = {}
+
+    for class_dir in sorted(plantvillage_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        normalized = normalize_name(class_dir.name)
+        target_class = PLANTVILLAGE_NORMALIZED_MAP.get(normalized)
+        if not target_class:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            print(f"Warning: no images found in {class_dir}")
+            continue
+
+        class_to_images.setdefault(target_class, []).extend(image_paths)
+
+    if not class_to_images:
+        raise FileNotFoundError(
+            "No PlantVillage class folders matched expected mappings under detected root."
+        )
+
+    for target_class, image_paths in sorted(class_to_images.items()):
+        unique_paths = sorted(set(image_paths))
+        process_class_images(unique_paths, target_class)
+
 
 def find_cassava_assets_csv() -> tuple[Path, Path] | None:
     csv_candidates = list(RAW_DIR.rglob("train.csv"))
-    image_dir_candidates = [p for p in RAW_DIR.rglob("train_images") if p.is_dir()]
+    image_dir_candidates = [path for path in RAW_DIR.rglob("train_images") if path.is_dir()]
 
-    best_match: tuple[int, Path, Path] | None = None
-
-    for csv_path in csv_candidates:
-        for image_dir in image_dir_candidates:
-            score = score_csv_candidate(csv_path, image_dir)
-            if best_match is None or score > best_match[0]:
-                best_match = (score, csv_path, image_dir)
-
-    if best_match is None:
+    if not csv_candidates or not image_dir_candidates:
         return None
 
-    _, csv_path, image_dir = best_match
-    print("Detected cassava CSV dataset:")
-    print(f"  CSV: {csv_path}")
-    print(f"  Images: {image_dir}")
-    return csv_path, image_dir
+    return None
 
 
 def find_cassava_assets_folder() -> Path | None:
     aliases = {normalize_name(k) for k in CASSAVA_CLASS_ALIASES.keys()}
-    best_match: tuple[int, Path] | None = None
 
+    best_match: tuple[int, Path] | None = None
     for folder in RAW_DIR.rglob("*"):
         if not folder.is_dir():
             continue
 
-        child_dirs = [child for child in folder.iterdir() if child.is_dir()]
-        child_names = {normalize_name(child.name) for child in child_dirs}
-        overlap = len(child_names & aliases)
+        child_dirs = {normalize_name(child.name) for child in folder.iterdir() if child.is_dir()}
+        overlap = len(child_dirs & aliases)
 
-        if overlap < 2:
-            continue
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
 
-        image_count = 0
-        for child in child_dirs:
-            if normalize_name(child.name) in aliases:
-                image_count += len(get_image_files(child))
-
-        score = overlap * 100 + image_count
-
-        if best_match is None or score > best_match[0]:
-            best_match = (score, folder)
-
-    if best_match:
-        print(f"Detected cassava folder dataset root: {best_match[1]}")
-        return best_match[1]
-
-    return None
+    return best_match[1] if best_match else None
 
 
 def prepare_cassava_from_csv(train_csv_path: Path, train_images_dir: Path) -> None:
@@ -454,6 +498,51 @@ def prepare_plantvillage() -> None:
         process_class_images(image_paths, target_class)
 
 
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected either train.csv + train_images "
+        "or class-folder formatted cassava dataset in data/raw. "
+        "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
+    )
+
+
 def print_dataset_summary() -> None:
     print("\nFinal dataset summary:")
     for split_name in ["train", "val", "test"]:
@@ -483,26 +572,31 @@ def main() -> None:
     ensure_dirs()
     clear_processed_dir()
 
-    print("\nDownloading PlantVillage...")
-    plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
+    print(f"PLANTVILLAGE_DATASET in use: {PLANTVILLAGE_DATASET}")
+    print(
+        "CASSAVA source mode: manual upload to data/raw"
+        if not CASSAVA_KAGGLEHUB_DATASET
+        else f"CASSAVA source mode: kagglehub ({CASSAVA_KAGGLEHUB_DATASET})"
+    )
 
-    print("\nDownloading Cassava competition...")
-    download_kaggle_competition()
+    plantvillage_ok = download_kaggle_dataset(PLANTVILLAGE_DATASET)
+    cassava_download_ok = download_kagglehub_cassava()
 
     if plantvillage_ok:
-        print("\nPreparing PlantVillage dataset...")
-        try:
-            prepare_plantvillage()
-        except Exception as exc:
-            print(f"Warning: PlantVillage preparation failed: {exc}")
+        print("\nPreparing PlantVillage classes...")
+        prepare_plantvillage()
     else:
         print("\nSkipping PlantVillage preparation due to download failure.")
 
-    print("\nPreparing cassava dataset...")
-    try:
-        prepare_cassava()
-    except Exception as exc:
-        print(f"Warning: cassava preparation failed: {exc}")
+    if cassava_download_ok:
+        print("\nPreparing cassava classes...")
+        try:
+            prepare_cassava()
+        except FileNotFoundError as exc:
+            print(f"Warning: {exc}")
+            print("Skipping cassava preparation.")
+    else:
+        print("\nSkipping cassava preparation due to download failure.")
 
     print_dataset_summary()
     print(f"\nDataset ready at: {PROCESSED_DIR.resolve()}")
