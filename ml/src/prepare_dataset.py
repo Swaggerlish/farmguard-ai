@@ -179,7 +179,6 @@ def download_kagglehub_cassava() -> bool:
         if extract_dir.exists():
             continue
         try:
-            import zipfile
             with zipfile.ZipFile(archive_path, "r") as zip_ref:
                 zip_ref.extractall(extract_dir)
             print(f"Extracted {archive_path} -> {extract_dir}")
@@ -188,6 +187,31 @@ def download_kagglehub_cassava() -> bool:
 
     print(f"Cassava dataset downloaded to: {destination}")
     return True
+
+
+
+
+def extract_archives_in_raw() -> None:
+    """Extract all zip files under data/raw to sibling folders for asset discovery."""
+    zip_paths = sorted(RAW_DIR.rglob("*.zip"))
+    if not zip_paths:
+        return
+
+    print(f"Found {len(zip_paths)} zip archive(s) under {RAW_DIR}; extracting...")
+    for archive_path in zip_paths:
+        extract_dir = archive_path.parent / archive_path.stem
+        if extract_dir.exists() and any(extract_dir.iterdir()):
+            continue
+
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+            print(f"Extracted {archive_path} -> {extract_dir}")
+        except zipfile.BadZipFile:
+            print(f"Warning: skipped invalid zip archive: {archive_path}")
+        except Exception as exc:
+            print(f"Warning: failed to extract {archive_path}: {exc}")
 
 
 def get_image_files(folder: Path) -> list[Path]:
@@ -271,6 +295,12 @@ def find_plantvillage_root() -> Path:
     if best_match:
         return best_match[1]
 
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
+
     try:
         df = pd.read_csv(csv_path, nrows=20)
         cols = set(df.columns)
@@ -286,14 +316,6 @@ def find_plantvillage_root() -> Path:
             score += existing * 10
     except Exception:
         pass
-
-    try:
-        depth_penalty = len(csv_path.relative_to(RAW_DIR).parts)
-        score -= depth_penalty
-    except Exception:
-        pass
-
-    return score
 
     class_to_images: dict[str, list[Path]] = {}
 
@@ -525,6 +547,54 @@ def prepare_cassava_from_folders(cassava_root: Path) -> None:
 
 
 def prepare_cassava() -> None:
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected either train.csv + train_images "
+        "or class-folder formatted cassava dataset in data/raw. "
+        "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
+    )
+
+
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    # Ensure manually uploaded archives in data/raw are extracted before discovery.
+    extract_archives_in_raw()
+
     csv_assets = find_cassava_assets_csv()
     if csv_assets:
         train_csv_path, train_images_dir = csv_assets

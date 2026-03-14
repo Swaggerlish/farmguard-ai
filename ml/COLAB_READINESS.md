@@ -59,6 +59,7 @@ Prepare dataset and train:
 - Supported layouts:
   - `train.csv` + `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
+- Zip files under `data/raw` are now auto-extracted before cassava asset discovery.
 
 If your folders are verbose names (for example `Cassava CB (Cassava Blight)`), rename them to `cbb`, `cmd`, `healthy` for best compatibility.
 
