@@ -59,6 +59,24 @@ Notes:
 - The transform pipeline now uses stronger augmentation and eval center-crop to reduce source bias.
 - If running on CPU, DataLoader pin-memory is now auto-disabled to avoid warnings.
 
+## Fine-tuning from your Hugging Face checkpoint
+You can warm-start training from your uploaded checkpoint (`swaggerlish/farmguard-ai-multi-crops-disease`) and fine-tune on a new dataset with lower learning rates:
+
+```bash
+python -m src.train \
+  --hf-repo-id swaggerlish/farmguard-ai-multi-crops-disease \
+  --hf-filename best_model.pth \
+  --img-size 300 \
+  --batch-size 24 \
+  --epochs-head 4 \
+  --epochs-ft 8 \
+  --lr-head 0.0003 \
+  --lr-ft 0.0001 \
+  --label-smoothing 0.05
+```
+
+If you prefer a local checkpoint instead of Hugging Face, use `--pretrained-checkpoint /path/to/best_model.pth`.
+
 ## Evaluate the Model
 Evaluation CLI is implemented in `src/evaluate.py`.
 

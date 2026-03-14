@@ -85,3 +85,17 @@ For web/in-the-wild images, train with a larger input size and mild label smooth
 ```bash
 !python -m src.train --img-size 300 --label-smoothing 0.05
 ```
+
+
+## Fine-tune from existing Hugging Face model
+Use your uploaded checkpoint as warm-start and keep low learning rates:
+
+```bash
+!python -m src.train \
+  --hf-repo-id swaggerlish/farmguard-ai-multi-crops-disease \
+  --hf-filename best_model.pth \
+  --img-size 300 \
+  --lr-head 0.0003 \
+  --lr-ft 0.0001 \
+  --label-smoothing 0.05
+```

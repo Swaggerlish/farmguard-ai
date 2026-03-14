@@ -2,6 +2,7 @@ import argparse
 import copy
 import json
 import os
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -46,6 +47,43 @@ def run_epoch(model, loader, criterion, optimizer=None, scaler=None, train=True)
     return epoch_loss, epoch_acc, epoch_f1
 
 
+def resolve_pretrained_checkpoint(
+    pretrained_checkpoint: str | None,
+    hf_repo_id: str | None,
+    hf_filename: str,
+    hf_revision: str,
+) -> str | None:
+    if pretrained_checkpoint:
+        checkpoint_path = Path(pretrained_checkpoint)
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Pretrained checkpoint not found: {checkpoint_path}")
+        return str(checkpoint_path)
+
+    if not hf_repo_id:
+        return None
+
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as exc:
+        raise ImportError(
+            "huggingface_hub is required for --hf-repo-id. Install with `pip install huggingface_hub`."
+        ) from exc
+
+    downloaded = hf_hub_download(repo_id=hf_repo_id, filename=hf_filename, revision=hf_revision)
+    return downloaded
+
+
+def load_pretrained_weights(model: nn.Module, checkpoint_path: str) -> None:
+    state_dict = torch.load(checkpoint_path, map_location=DEVICE)
+    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+
+    print(f"Loaded pretrained checkpoint: {checkpoint_path}")
+    if missing_keys:
+        print(f"Warning: missing keys while loading checkpoint ({len(missing_keys)}).")
+    if unexpected_keys:
+        print(f"Warning: unexpected keys while loading checkpoint ({len(unexpected_keys)}).")
+
+
 def train_model(
     train_dir,
     val_dir,
@@ -58,6 +96,13 @@ def train_model(
     num_workers=2,
     pin_memory=None,
     label_smoothing=0.0,
+    lr_head=3e-4,
+    lr_ft=1e-4,
+    weight_decay=1e-4,
+    pretrained_checkpoint=None,
+    hf_repo_id=None,
+    hf_filename="best_model.pth",
+    hf_revision="main",
 ):
     os.makedirs(out_dir, exist_ok=True)
 
@@ -75,11 +120,21 @@ def train_model(
         json.dump(train_ds.class_to_idx, f, indent=2)
 
     model = build_model(num_classes=len(train_ds.classes), freeze_backbone=True).to(DEVICE)
+
+    resolved_checkpoint = resolve_pretrained_checkpoint(
+        pretrained_checkpoint=pretrained_checkpoint,
+        hf_repo_id=hf_repo_id,
+        hf_filename=hf_filename,
+        hf_revision=hf_revision,
+    )
+    if resolved_checkpoint:
+        load_pretrained_weights(model, resolved_checkpoint)
+
     criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
-        lr=1e-3,
-        weight_decay=1e-4,
+        lr=lr_head,
+        weight_decay=weight_decay,
     )
     scaler = GradScaler(enabled=(DEVICE == "cuda"))
 
@@ -89,6 +144,7 @@ def train_model(
     print(f"Device: {DEVICE}")
     print(f"Classes: {len(train_ds.classes)}")
     print(f"Image size: {img_size}")
+    print(f"Learning rates -> head: {lr_head}, fine-tune: {lr_ft}")
     print("Stage 1: training head")
 
     for epoch in range(epochs_head):
@@ -112,8 +168,8 @@ def train_model(
 
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
-        lr=2e-4,
-        weight_decay=1e-4,
+        lr=lr_ft,
+        weight_decay=weight_decay,
     )
 
     for epoch in range(epochs_ft):
@@ -155,6 +211,30 @@ def parse_args() -> argparse.Namespace:
         help="Force DataLoader pin_memory=True (defaults to CUDA-aware auto mode).",
     )
     parser.add_argument("--label-smoothing", type=float, default=0.0)
+    parser.add_argument("--lr-head", type=float, default=3e-4)
+    parser.add_argument("--lr-ft", type=float, default=1e-4)
+    parser.add_argument("--weight-decay", type=float, default=1e-4)
+
+    parser.add_argument(
+        "--pretrained-checkpoint",
+        default=None,
+        help="Local checkpoint path to warm-start fine-tuning.",
+    )
+    parser.add_argument(
+        "--hf-repo-id",
+        default=None,
+        help="Hugging Face model repo id for warm-start (e.g. swaggerlish/farmguard-ai-multi-crops-disease).",
+    )
+    parser.add_argument(
+        "--hf-filename",
+        default="best_model.pth",
+        help="Checkpoint filename inside Hugging Face repo.",
+    )
+    parser.add_argument(
+        "--hf-revision",
+        default="main",
+        help="Hugging Face revision/branch/tag to download from.",
+    )
     return parser.parse_args()
 
 
@@ -172,4 +252,11 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         pin_memory=True if args.pin_memory else None,
         label_smoothing=args.label_smoothing,
+        lr_head=args.lr_head,
+        lr_ft=args.lr_ft,
+        weight_decay=args.weight_decay,
+        pretrained_checkpoint=args.pretrained_checkpoint,
+        hf_repo_id=args.hf_repo_id,
+        hf_filename=args.hf_filename,
+        hf_revision=args.hf_revision,
     )
