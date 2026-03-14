@@ -27,7 +27,7 @@ Automated cassava download in notebook/runtime can fail when competition access 
 
 ### Expected manual cassava layout
 After upload/extraction, cassava data should be placed under `data/raw` in one of these supported formats:
-- `train.csv` + `train_images/`
+- a CSV with `image_id` and `label` columns + `train_images/`
 - class folders (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`) or equivalent verbose names handled by alias mapping in `prepare_dataset.py`.
 
 ## Dataset Preparation

@@ -301,6 +301,12 @@ def find_plantvillage_root() -> Path:
     if best_match:
         return best_match[1]
 
+        if overlap >= 2 and (best_match is None or overlap > best_match[0]):
+            best_match = (overlap, folder)
+
+    if best_match:
+        return best_match[1]
+
     try:
         df = pd.read_csv(csv_path, nrows=20)
         cols = set(df.columns)
@@ -316,6 +322,12 @@ def find_plantvillage_root() -> Path:
             score += existing * 10
     except Exception:
         pass
+
+    class_to_images: dict[str, list[Path]] = {}
+
+    for class_dir in sorted(plantvillage_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
 
     class_to_images: dict[str, list[Path]] = {}
 
@@ -346,11 +358,39 @@ def find_plantvillage_root() -> Path:
 
 
 def find_cassava_assets_csv() -> tuple[Path, Path] | None:
-    csv_candidates = list(RAW_DIR.rglob("train.csv"))
+    """
+    Locate cassava CSV + image folder assets.
+
+    Supports canonical `train.csv` as well as alternate csv names,
+    as long as required columns (`image_id`, `label`) exist.
+    """
+    csv_candidates = [path for path in RAW_DIR.rglob("*.csv") if path.is_file()]
+    if not csv_candidates:
+        return None
+
     image_dir_candidates = [path for path in RAW_DIR.rglob("train_images") if path.is_dir()]
 
-    if not csv_candidates or not image_dir_candidates:
-        return None
+    for csv_path in sorted(csv_candidates):
+        try:
+            columns = set(pd.read_csv(csv_path, nrows=1).columns)
+        except Exception:
+            continue
+
+        if not {"image_id", "label"}.issubset(columns):
+            continue
+
+        # Prefer train_images near the csv file.
+        preferred = [
+            csv_path.parent / "train_images",
+            csv_path.parent.parent / "train_images",
+        ]
+        for candidate in preferred:
+            if candidate.exists() and candidate.is_dir():
+                return csv_path, candidate
+
+        # Fallback to any discovered train_images directory.
+        if image_dir_candidates:
+            return csv_path, image_dir_candidates[0]
 
     return None
 
@@ -610,6 +650,59 @@ def prepare_cassava() -> None:
         "Could not find cassava assets. Expected either train.csv + train_images "
         "or class-folder formatted cassava dataset in data/raw. "
         "Tip: rename class folders to aliases like cbb/cmd/healthy when using custom datasets."
+    )
+
+
+def prepare_cassava_from_folders(cassava_root: Path) -> None:
+    print(f"Using cassava folder root: {cassava_root}")
+
+    found_any = False
+    for class_dir in sorted(cassava_root.iterdir()):
+        if not class_dir.is_dir():
+            continue
+
+        alias = normalize_name(class_dir.name)
+        target = CASSAVA_CLASS_ALIASES.get(alias)
+        if not target:
+            continue
+
+        image_paths = get_image_files(class_dir)
+        if not image_paths:
+            continue
+
+        found_any = True
+        process_class_images(image_paths, target)
+
+    if not found_any:
+        raise FileNotFoundError(
+            "No cassava class folders matched expected aliases under cassava root."
+        )
+
+
+def prepare_cassava() -> None:
+    # Ensure manually uploaded archives in data/raw are extracted before discovery.
+    extract_archives_in_raw()
+
+    csv_assets = find_cassava_assets_csv()
+    if csv_assets:
+        train_csv_path, train_images_dir = csv_assets
+        prepare_cassava_from_csv(train_csv_path, train_images_dir)
+        return
+
+    folder_root = find_cassava_assets_folder()
+    if folder_root:
+        prepare_cassava_from_folders(folder_root)
+        return
+
+    csv_candidates = sorted([path for path in RAW_DIR.rglob("*.csv") if path.is_file()])
+    image_candidates = sorted([path for path in RAW_DIR.rglob("train_images") if path.is_dir()])
+
+    raise FileNotFoundError(
+        "Could not find cassava assets. Expected CSV+images (with columns image_id,label) "
+        "or class-folder formatted cassava dataset in data/raw. "
+        f"Found csv files: {len(csv_candidates)}, train_images dirs: {len(image_candidates)}. "
+        "Tip: ensure the extracted folder contains both train_images and a CSV with image_id,label; "
+        "or rename class folders to aliases like cbb/cmd/healthy."
     )
 
 

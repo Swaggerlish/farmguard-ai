@@ -57,7 +57,7 @@ Prepare dataset and train:
 - Primary workflow: manually download cassava competition data from Kaggle website and upload/extract to `data/raw`.
 - The preparation script first tries to discover cassava assets already in `data/raw`.
 - Supported layouts:
-  - `train.csv` + `train_images`, or
+  - a CSV containing `image_id` + `label` columns plus `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
 - Zip files under `data/raw` are now auto-extracted before cassava asset discovery.
 
