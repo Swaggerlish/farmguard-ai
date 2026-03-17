@@ -77,6 +77,20 @@ python -m src.train \
 
 If you prefer a local checkpoint instead of Hugging Face, use `--pretrained-checkpoint /path/to/best_model.pth`.
 
+
+## Stratified K-Fold Training (simple CV)
+For a quick cross-validation baseline from a single ImageFolder dataset, use `src/train_kfold.py`:
+
+```bash
+python -m src.train_kfold \
+  --data-dir data/processed/train \
+  --n-splits 5 \
+  --epochs 6 \
+  --batch-size 24
+```
+
+Outputs include one checkpoint per fold (`best_model_fold*.pth`) and `kfold_results.json` under `outputs/checkpoints_kfold/`.
+
 ## Evaluate the Model
 Evaluation CLI is implemented in `src/evaluate.py`.
 
