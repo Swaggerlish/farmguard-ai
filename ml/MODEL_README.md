@@ -27,7 +27,7 @@ Automated cassava download in notebook/runtime can fail when competition access 
 
 ### Expected manual cassava layout
 After upload/extraction, cassava data should be placed under `data/raw` in one of these supported formats:
-- `train.csv` + `train_images/`
+- a CSV with `image_id` and `label` columns + `train_images/`
 - class folders (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`) or equivalent verbose names handled by alias mapping in `prepare_dataset.py`.
 
 ## Dataset Preparation
@@ -41,6 +41,55 @@ Dataset preparation is implemented in `src/prepare_dataset.py`:
   - `data/processed/train`
   - `data/processed/val`
   - `data/processed/test`
+
+## Improving Cross-Source Prediction Quality
+If panelists will test with internet images, expect domain shift. Recommended training settings:
+
+```bash
+python -m src.train \
+  --img-size 300 \
+  --batch-size 24 \
+  --epochs-head 6 \
+  --epochs-ft 10 \
+  --label-smoothing 0.05
+```
+
+Notes:
+- `--img-size 300` keeps more lesion detail than 224 for small disease spots.
+- The transform pipeline now uses stronger augmentation and eval center-crop to reduce source bias.
+- If running on CPU, DataLoader pin-memory is now auto-disabled to avoid warnings.
+
+## Fine-tuning from your Hugging Face checkpoint
+You can warm-start training from your uploaded checkpoint (`swaggerlish/farmguard-ai-multi-crops-disease`) and fine-tune on a new dataset with lower learning rates:
+
+```bash
+python -m src.train \
+  --hf-repo-id swaggerlish/farmguard-ai-multi-crops-disease \
+  --hf-filename best_model.pth \
+  --img-size 300 \
+  --batch-size 24 \
+  --epochs-head 4 \
+  --epochs-ft 8 \
+  --lr-head 0.0003 \
+  --lr-ft 0.0001 \
+  --label-smoothing 0.05
+```
+
+If you prefer a local checkpoint instead of Hugging Face, use `--pretrained-checkpoint /path/to/best_model.pth`.
+
+
+## Stratified K-Fold Training (simple CV)
+For a quick cross-validation baseline from a single ImageFolder dataset, use `src/train_kfold.py`:
+
+```bash
+python -m src.train_kfold \
+  --data-dir data/processed/train \
+  --n-splits 5 \
+  --epochs 6 \
+  --batch-size 24
+```
+
+Outputs include one checkpoint per fold (`best_model_fold*.pth`) and `kfold_results.json` under `outputs/checkpoints_kfold/`.
 
 ## Evaluate the Model
 Evaluation CLI is implemented in `src/evaluate.py`.
@@ -76,7 +125,7 @@ pip install -r requirements.txt
 # optional ONLY if you want non-competition cassava auto-download
 # export CASSAVA_KAGGLEHUB_DATASET="<owner/dataset-slug>"
 python -m src.prepare_dataset
-python -m src.train
+python -m src.train --img-size 300 --label-smoothing 0.05
 python -m src.evaluate
 ```
 

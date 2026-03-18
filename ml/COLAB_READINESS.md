@@ -48,7 +48,7 @@ Prepare dataset and train:
 
 ```bash
 !python -m src.prepare_dataset
-!python -m src.train
+!python -m src.train --img-size 300 --label-smoothing 0.05
 !python -m src.evaluate
 ```
 
@@ -57,8 +57,9 @@ Prepare dataset and train:
 - Primary workflow: manually download cassava competition data from Kaggle website and upload/extract to `data/raw`.
 - The preparation script first tries to discover cassava assets already in `data/raw`.
 - Supported layouts:
-  - `train.csv` + `train_images`, or
+  - a CSV containing `image_id` + `label` columns plus `train_images`, or
   - class-folder formatted cassava images (`cbb`, `cbsd`, `cgm`, `cmd`, `healthy`).
+- Zip files under `data/raw` are now auto-extracted before cassava asset discovery.
 
 If your folders are verbose names (for example `Cassava CB (Cassava Blight)`), rename them to `cbb`, `cmd`, `healthy` for best compatibility.
 
@@ -76,3 +77,25 @@ Optional (advanced): set `CASSAVA_KAGGLEHUB_DATASET` only if you want non-compet
 - **Suitable for training on Colab after small setup steps.**
 - With the import fix in this commit, the core train pipeline should run more reliably from a standard Colab working directory.
 
+
+
+## Cross-source robustness tip
+For web/in-the-wild images, train with a larger input size and mild label smoothing:
+
+```bash
+!python -m src.train --img-size 300 --label-smoothing 0.05
+```
+
+
+## Fine-tune from existing Hugging Face model
+Use your uploaded checkpoint as warm-start and keep low learning rates:
+
+```bash
+!python -m src.train \
+  --hf-repo-id swaggerlish/farmguard-ai-multi-crops-disease \
+  --hf-filename best_model.pth \
+  --img-size 300 \
+  --lr-head 0.0003 \
+  --lr-ft 0.0001 \
+  --label-smoothing 0.05
+```

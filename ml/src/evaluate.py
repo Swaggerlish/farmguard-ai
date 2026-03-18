@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default="outputs/checkpoints/best_model.pth")
     parser.add_argument("--class-map", default="outputs/checkpoints/class_to_idx.json")
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--img-size", type=int, default=224)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--no-pin-memory", action="store_true")
     parser.add_argument(
@@ -54,6 +55,7 @@ def evaluate() -> None:
         args.val_dir,
         args.test_dir,
         batch_size=args.batch_size,
+        img_size=args.img_size,
         num_workers=args.num_workers,
         pin_memory=not args.no_pin_memory,
     )
