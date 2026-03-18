@@ -1,4 +1,4 @@
-# FarmGuard AI Model README
+# FarmGuard AI - Detect crop diseases instantly using artificial intelligence
 
 This document describes the trained crop-disease classifier model, how to reproduce training/evaluation, and how to publish model artifacts to Hugging Face.
 

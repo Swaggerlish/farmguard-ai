@@ -1,4 +1,4 @@
-# FarmGuard AI: Google Colab Readiness Review
+# FarmGuard AI - Detect crop diseases instantly using artificial intelligence: Google Colab Readiness Review
 
 ## Verdict
 The repository is **close to Colab-ready**, but not fully plug-and-play yet.
